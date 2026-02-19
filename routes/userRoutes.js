@@ -13,8 +13,8 @@ router.post("/", userController.createUser);
 router.post("/login", userController.loginUser);
 
 
-// Find Password Route   // only for ttesting, remove in production
-router.post("/findpassword", userController.findpassword);
+// // Find Password Route   // only for ttesting, remove in production
+// router.post("/findpassword", userController.findpassword);
 
 
 // --- PROTECTED ROUTES (Requires Login) ---

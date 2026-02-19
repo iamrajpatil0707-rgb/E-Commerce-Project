@@ -125,47 +125,132 @@ exports.getUserById = async (req, res) => {
   }
 };
 
-// 5. UPDATE USER
+
 exports.updateUser = async (req, res) => {
   try {
+    // 1. Check if user is logged in
     if (!req.user) {
       return res.status(401).json({ success: false, message: 'User not authenticated' });
     }
-    const isOwner = req.user.id === req.params.id;
-    const isAdmin = req.user.role === 'admin' || req.user.role === 'root';
-    if (!isOwner && !isAdmin) {
-      return res.status(403).json({ success: false, message: 'Access denied' });
+
+    const targetUserId = req.params.id;
+    const isOwner = req.user.id === targetUserId; // Kya user khud ki profile update kar raha hai?
+    
+    // 2. Database se Target User ko dhoondho (Jisko edit karna hai)
+    const targetUser = await User.findById(targetUserId);
+    if (!targetUser) {
+      return res.status(404).json({ success: false, message: 'User not found' });
     }
 
-    // Security: Don't allow password update here
+    // 3. 👑 THE RANKING SYSTEM (Levels define karo)
+    const roleLevels = {
+      'user': 1,
+      'manager': 2,
+      'admin': 3,
+      'superuser': 4,
+      'root': 5
+    };
+
+    const myLevel = roleLevels[req.user.role];        // Meri (Logged-in user) aukaat
+    const targetLevel = roleLevels[targetUser.role];  // Samne wale ki aukaat
+
+    // 4. BASIC PROFILE EDITING RULES (Name, Phone, etc.)
+    // Agar main khud ki profile edit nahi kar raha hu, toh meri aukaat target se badi honi chahiye
+    if (!isOwner && myLevel <= targetLevel) {
+      return res.status(403).json({ 
+        success: false, 
+        message: "Access denied: Aap apne se senior ya apne barabar walo ki profile chhed nahi sakte!" 
+      });
+    }
+
+    // 5. 🔥 ROLE CHANGE RULES (Kisko kya role de sakte hain?)
+    if (req.body.role) {
+      const newRoleLevel = roleLevels[req.body.role];
+
+      // Rule A: Koi bhi khud ka role upgrade nahi kar sakta (Varna Admin khud ko Root bana lega)
+      if (isOwner) {
+        return res.status(403).json({
+          success: false,
+          message: "Access denied: Aap khud apna role upgrade ya change nahi kar sakte!"
+        });
+      }
+
+      // Rule B: Jo naya role aap de rahe ho, wo aapki apni power se strictly chota hona chahiye
+      if (myLevel <= newRoleLevel) {
+         return res.status(403).json({
+           success: false,
+           message: `Access denied: Aap kisi ko '${req.body.role}' nahi bana sakte kyunki ye aapki aukaat se bahar hai.`
+         });
+      }
+    }
+
+    // 6. Security Measure: Password yahan se change nahi hona chahiye (uske liye alag route hai)
     if (req.body.password) {
       delete req.body.password;
     }
 
-    if (req.body.role && !isAdmin) {
-      return res.status(403).json({ success: false, message: 'Only admins can change roles' });
-    }
-
+    // 7. Audit Trail: Kisne update kiya wo record karo
     req.body.updatedBy = req.user._id;
     
-    const user = await User.findByIdAndUpdate(
-      req.params.id,
+    // 8. Final Update in Database
+    const updatedUser = await User.findByIdAndUpdate(
+      targetUserId,
       req.body,
       { new: true, runValidators: true }
-    ).select('-password');
+    ).select('-password'); // Password hata kar data wapas bhejo
     
-    if (!user) {
-      return res.status(404).json({ success: false, message: 'User not found' });
-    }
     res.status(200).json({
       success: true,
-      data: user,
-      message: 'User updated successfully'
+      data: updatedUser,
+      message: 'User profile updated successfully'
     });
+
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });
   }
 };
+
+// 5. UPDATE USER
+// exports.updateUser = async (req, res) => {
+//   try {
+//     if (!req.user) {
+//       return res.status(401).json({ success: false, message: 'User not authenticated' });
+//     }
+//     const isOwner = req.user.id === req.params.id;
+//     const isAdmin = req.user.role === 'admin' || req.user.role === 'root';
+//     if (!isOwner && !isAdmin) {
+//       return res.status(403).json({ success: false, message: 'Access denied' });
+//     }
+
+//     // Security: Don't allow password update here
+//     if (req.body.password) {
+//       delete req.body.password;
+//     }
+
+//     if (req.body.role && !isAdmin) {
+//       return res.status(403).json({ success: false, message: 'Only admins can change roles' });
+//     }
+
+//     req.body.updatedBy = req.user._id;
+    
+//     const user = await User.findByIdAndUpdate(
+//       req.params.id,
+//       req.body,
+//       { new: true, runValidators: true }
+//     ).select('-password');
+    
+//     if (!user) {
+//       return res.status(404).json({ success: false, message: 'User not found' });
+//     }
+//     res.status(200).json({
+//       success: true,
+//       data: user,
+//       message: 'User updated successfully'
+//     });
+//   } catch (error) {
+//     res.status(400).json({ success: false, message: error.message });
+//   }
+// };
 
 
 exports.simplePasswordUpdate = async (req, res) => {

@@ -5,14 +5,17 @@ const authMiddleware = require('../middleware/authMiddleware');
 const { allowRoles } = require('../middleware/roleMiddleware');
 
 // Admin sees all, User sees their own (handled in controller)
-router.get('/', authMiddleware, allowRoles('admin', 'manager', 'user'), orderController.getAllOrders);
+router.get('/', authMiddleware, allowRoles('support', 'sales', 'manager', 'admin', 'root'), orderController.getAllOrders);
 router.get('/:id', authMiddleware, allowRoles('admin', 'manager', 'user'), orderController.getOrderById);
 
 // Anyone logged in can create an order
 router.post('/', authMiddleware, allowRoles('user', 'admin', 'manager'), orderController.createOrder);
 
 // Only Admin/Manager can update status (e.g. "Shipped")
-router.put('/:id', authMiddleware, allowRoles('admin', 'manager'), orderController.updateOrder);
+router.put('/:id', authMiddleware, allowRoles('editor', 'marketing', 'manager', 'admin', 'root'), orderController.updateOrder);
+
+// orderRoutes.js
+router.put('/:id/status', authMiddleware, allowRoles('delivery', 'manager', 'admin', 'root'), orderController.updateOrderStatus);
 
 // Admin can delete, User can maybe cancel (delete) pending orders?
 router.delete('/:id', authMiddleware, allowRoles('admin', 'user'), orderController.deleteOrder);

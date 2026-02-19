@@ -191,3 +191,35 @@ exports.deleteOrder = async (req, res) => {
     });
   }
 };
+
+// Naya Function: Sirf Order ka status change karne ke liye (Delivery/Manager ke liye)
+exports.updateOrderStatus = async (req, res) => {
+  try {
+    const { status } = req.body;
+
+    // Status validate karna (taaki koi faltu text na bhej de)
+    const validStatuses = ['pending', 'processing', 'shipped', 'delivered', 'cancelled'];
+    if (!validStatuses.includes(status)) {
+       return res.status(400).json({ success: false, message: 'Invalid status value' });
+    }
+
+    const order = await Order.findByIdAndUpdate(
+      req.params.id,
+      { status: status }, // Sirf status update hoga, baaki pura order safe rahega
+      { new: true, runValidators: true }
+    );
+
+    if (!order) {
+      return res.status(404).json({ success: false, message: 'Order not found' });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: order,
+      message: `Order status updated to ${status} successfully`
+    });
+
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
