@@ -22,17 +22,18 @@ const userSchema = new mongoose.Schema({
   role: {
     type: String,
     enum: [
-    'user',         // 1. Regular customer
-    'support',      // 2. Customer care (sirf complaints/orders dekh sakta hai)
-    'delivery',     // 3. Delivery boy (sirf order status "delivered" kar sakta hai)
-    'vendor',       // 4. Third-party seller (apne products add kar sakta hai)
-    'marketing',    // 5. SEO/Ads team (sirf products dekh/edit kar sakta hai)
-    'sales',        // 6. Sales team (sirf revenue aur orders dekh sakta hai)
-    'manager',      // 7. Store manager (daily operations)
-    'editor',       // 8. Content writer (product descriptions likhne ke liye)
-    'admin',        // 9. Main admin (Full access except system settings)
-    'root'          // 10. The Creator / God Mode
-  ],
+      'user',         // 1. Regular customer
+      'support',      // 2. Customer care (can only view complaints/orders)
+      'delivery',     // 3. Delivery staff (can only mark order status as "delivered")
+      'vendor',       // 4. Third-party seller (can add own products)
+      'marketing',    // 5. SEO/Ads team (can view/edit products only)
+      'sales',        // 6. Sales team (can view revenue and orders only)
+      'manager',      // 7. Store manager (daily operations)
+      'editor',       // 8. Content writer (for writing product descriptions)
+      'admin',        // 9. Main admin (Full access except system settings)
+      'superuser',    // 10. Senior Admin
+      'root'          // 11. The Creator / God Mode
+    ],
     default: 'user'
   },
   phone: {

@@ -192,34 +192,62 @@ exports.deleteOrder = async (req, res) => {
   }
 };
 
-// Naya Function: Sirf Order ka status change karne ke liye (Delivery/Manager ke liye)
-exports.updateOrderStatus = async (req, res) => {
+
+
+// Get all, Get by ID and Create order remain the same as above
+
+// Update order (Full update - Strictly for Managers/Admins)
+exports.updateOrder = async (req, res) => {
   try {
-    const { status } = req.body;
+    const existingOrder = await Order.findById(req.params.id);
+    if (!existingOrder) return res.status(404).json({ success: false, message: 'Order not found' });
 
-    // Status validate karna (taaki koi faltu text na bhej de)
-    const validStatuses = ['pending', 'processing', 'shipped', 'delivered', 'cancelled'];
-    if (!validStatuses.includes(status)) {
-       return res.status(400).json({ success: false, message: 'Invalid status value' });
+    // Only Admin, Manager and Superuser can modify entire orders
+    const hasSuperPower = ['admin', 'superuser', 'root', 'manager'].includes(req.user.role);
+    if (!hasSuperPower) {
+      return res.status(403).json({ success: false, message: 'Access denied: You cannot modify this order' });
     }
 
-    const order = await Order.findByIdAndUpdate(
-      req.params.id,
-      { status: status }, // Sirf status update hoga, baaki pura order safe rahega
-      { new: true, runValidators: true }
-    );
-
-    if (!order) {
-      return res.status(404).json({ success: false, message: 'Order not found' });
-    }
-
-    res.status(200).json({
-      success: true,
-      data: order,
-      message: `Order status updated to ${status} successfully`
-    });
-
+    const order = await Order.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true })
+      .populate('user', '-password')
+      .populate('products.product');
+    
+    res.status(200).json({ success: true, data: order, message: 'Order updated successfully' });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });
   }
 };
+
+// Delete order remains the same as above...
+
+// Update Order Status (Design C: Field Level Filter)
+exports.updateOrderStatus = async (req, res) => {
+  try {
+    const { status } = req.body;
+    const validStatuses = ['pending', 'processing', 'shipped', 'delivered', 'cancelled'];
+    
+    if (!validStatuses.includes(status)) {
+       return res.status(400).json({ success: false, message: 'Invalid status value' });
+    }
+
+    // Delivery staff can only mark orders as 'delivered'
+    if (req.user.role === 'delivery' && status !== 'delivered') {
+      return res.status(403).json({ success: false, message: 'Delivery staff can only mark orders as "delivered"!' });
+    }
+
+    // Only status will be updated, rest of order remains protected (Field Level Filtering)
+    const order = await Order.findByIdAndUpdate(req.params.id, { status: status }, { new: true, runValidators: true });
+    if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
+
+    res.status(200).json({ success: true, data: order, message: `Order status updated to ${status} successfully` });
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+
+
+
+
+
+

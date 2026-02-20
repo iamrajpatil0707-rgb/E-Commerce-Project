@@ -23,8 +23,8 @@
           });
         }
 
-        req.user = user; // 🔥 VERY IMPORTANT
-        next(); // 👉 yahin se next route/middleware pe jaata hai
+        req.user = user; // VERY IMPORTANT
+        next(); // passes control to next route/middleware here
       } catch (error) {
         return res.status(401).json({
           success: false,

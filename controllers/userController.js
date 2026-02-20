@@ -47,29 +47,29 @@ exports.loginUser = async (req, res) => {
 
 
 
-exports.findpassword = async (req, res) => {
-  try {
-    const { email } = req.body;   
-    // Check if user exists
-    const user = await User.findOne({ email });
-    if (!user) {
-      return res.status(401).json({ success: false, message: "Invalid email Credentials" });
-    }   
+// exports.findpassword = async (req, res) => {
+//   try {
+//     const { email } = req.body;   
+//     // Check if user exists
+//     const user = await User.findOne({ email });
+//     if (!user) {
+//       return res.status(401).json({ success: false, message: "Invalid email Credentials" });
+//     }   
 
-    res.status(200).json({
-      success: true,
-      user: {
-        id: user._id,
-        name: user.name,
-        role: user.role,    
-        password: user.password
-      }
-    });
-  }   
-  catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-};
+//     res.status(200).json({
+//       success: true,
+//       user: {
+//         id: user._id,
+//         name: user.name,
+//         role: user.role,    
+//         password: user.password
+//       }
+//     });
+//   }   
+//   catch (error) {
+//     res.status(500).json({ success: false, message: error.message });
+//   }
+// };
 
 
 // 2. CREATE NEW USER (Signup)
@@ -134,62 +134,88 @@ exports.updateUser = async (req, res) => {
     }
 
     const targetUserId = req.params.id;
-    const isOwner = req.user.id === targetUserId; // Kya user khud ki profile update kar raha hai?
+    const isOwner = req.user.id === targetUserId; // Is the user updating their own profile?
     
-    // 2. Database se Target User ko dhoondho (Jisko edit karna hai)
+    // 2. Fetch the target user from the database (the user to be edited)
     const targetUser = await User.findById(targetUserId);
     if (!targetUser) {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
 
-    // 3. 👑 THE RANKING SYSTEM (Levels define karo)
+    // 3. THE FULL 11-LEVEL RANKING SYSTEM
     const roleLevels = {
-      'user': 1,
-      'manager': 2,
-      'admin': 3,
-      'superuser': 4,
-      'root': 5
-    };
+      'user': 1,         // Lowest level
+      'support': 2,
+      'delivery': 3,
+      'vendor': 4,
+      'marketing': 5,
+      'sales': 6,
+      'editor': 7,
+      'manager': 8,      // Manager level 8
+      'admin': 9, 
+      'superuser': 10,
+      'root': 11         // The Boss (Highest level)
+    };        
 
-    const myLevel = roleLevels[req.user.role];        // Meri (Logged-in user) aukaat
-    const targetLevel = roleLevels[targetUser.role];  // Samne wale ki aukaat
+    // // 3. THE RANKING SYSTEM (Define levels)
+    // const roleLevels = {
+    //   'user': 1,
+    //   'manager': 2,
+    //   'admin': 3,
+    //   'superuser': 4,
+    //   'root': 5
+    // };
+
+    const myLevel = roleLevels[req.user.role];        // Authority level of logged-in user
+    const targetLevel = roleLevels[targetUser.role];  // Authority level of target user
 
     // 4. BASIC PROFILE EDITING RULES (Name, Phone, etc.)
-    // Agar main khud ki profile edit nahi kar raha hu, toh meri aukaat target se badi honi chahiye
+    // If I am not editing my own profile, my level must be higher than target's level
     if (!isOwner && myLevel <= targetLevel) {
       return res.status(403).json({ 
         success: false, 
-        message: "Access denied: Aap apne se senior ya apne barabar walo ki profile chhed nahi sakte!" 
+        message: "Access denied: You cannot modify profiles of users at your level or higher!" 
       });
     }
 
-    // 5. 🔥 ROLE CHANGE RULES (Kisko kya role de sakte hain?)
+    // 5. ROLE CHANGE RULES (Who can assign which roles?)
     if (req.body.role) {
+      
+      // Gatekeeper Check: Only these 4 roles can assign roles
+      const allowedToAssignRoles = ['manager', 'admin', 'superuser', 'root'];
+      if (!allowedToAssignRoles.includes(req.user.role)) {
+         return res.status(403).json({
+            success: false,
+            message: "Access denied: Only Manager, Admin, Superuser, or Root can assign roles!"
+         });
+      }
+
+      // Define the level of the new role (This should not be commented out!)
       const newRoleLevel = roleLevels[req.body.role];
 
-      // Rule A: Koi bhi khud ka role upgrade nahi kar sakta (Varna Admin khud ko Root bana lega)
+      // Rule A: No one can change their own role
       if (isOwner) {
         return res.status(403).json({
           success: false,
-          message: "Access denied: Aap khud apna role upgrade ya change nahi kar sakte!"
+          message: "Access denied: You cannot upgrade or change your own role!"
         });
       }
 
-      // Rule B: Jo naya role aap de rahe ho, wo aapki apni power se strictly chota hona chahiye
-      if (myLevel <= newRoleLevel) {
+      // Rule B: Rank check + Root Exception
+      if (myLevel <= newRoleLevel && req.user.role !== 'root') {
          return res.status(403).json({
            success: false,
-           message: `Access denied: Aap kisi ko '${req.body.role}' nahi bana sakte kyunki ye aapki aukaat se bahar hai.`
+           message: `Access denied: You cannot assign '${req.body.role}' role as it is beyond your authority level.`
          });
       }
     }
 
-    // 6. Security Measure: Password yahan se change nahi hona chahiye (uske liye alag route hai)
+    // 6. Security Measure: Password should not be changed here (there is a separate route for it)
     if (req.body.password) {
       delete req.body.password;
     }
 
-    // 7. Audit Trail: Kisne update kiya wo record karo
+    // 7. Audit Trail: Record who made the update
     req.body.updatedBy = req.user._id;
     
     // 8. Final Update in Database
@@ -197,7 +223,7 @@ exports.updateUser = async (req, res) => {
       targetUserId,
       req.body,
       { new: true, runValidators: true }
-    ).select('-password'); // Password hata kar data wapas bhejo
+    ).select('-password'); // Return data without password
     
     res.status(200).json({
       success: true,
@@ -260,7 +286,7 @@ exports.simplePasswordUpdate = async (req, res) => {
 
     // Check: Is the person logged in the Owner OR an Admin?
     const isOwner = req.user.id === targetUserId;
-    const isAdmin = req.user.role === 'admin' || req.user.role === 'root';
+    const isAdmin = req.user.role === 'admin' || req.user.role === 'superuser' || req.user.role === 'root';
 
     if (!isOwner && !isAdmin) {
       return res.status(403).json({ 
@@ -286,15 +312,65 @@ exports.simplePasswordUpdate = async (req, res) => {
 
 
 // 6. DELETE USER
+// 6. DELETE USER
 exports.deleteUser = async (req, res) => {
   try {
-    const user = await User.findByIdAndDelete(req.params.id);
-    if (!user) {
+    const targetUserId = req.params.id;
+
+    // 1. First find the target user (Do not delete directly!)
+    const targetUser = await User.findById(targetUserId);
+    if (!targetUser) {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
-    res.status(200).json({ success: true, message: 'User deleted successfully' });
+
+    // 2. THE FULL 11-LEVEL RANKING SYSTEM
+    const roleLevels = {
+      'user': 1,         
+      'support': 2,
+      'delivery': 3,
+      'vendor': 4,
+      'marketing': 5,
+      'sales': 6,
+      'editor': 7,
+      'manager': 8,      
+      'admin': 9, 
+      'superuser': 10,
+      'root': 11         
+    };
+
+    const myLevel = roleLevels[req.user.role];        // Authority level of the user performing deletion
+    const targetLevel = roleLevels[targetUser.role];  // Authority level of the user being deleted
+
+    // 3. HIERARCHY CHECK (Rank Rule)
+    // You cannot delete users at your level or higher
+    // Exception: 'root' can delete anyone
+    if (myLevel <= targetLevel && req.user.role !== 'root') {
+        return res.status(403).json({ 
+          success: false, 
+          message: `Access denied: You cannot delete a '${targetUser.role}' user. This action is beyond your authority level!` 
+        });
+    }
+
+    // 4. If everything is valid, proceed with deletion
+    await User.findByIdAndDelete(targetUserId);
+    
+    res.status(200).json({ success: true, message: `User (${targetUser.role}) deleted successfully!` });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
+
+
+// exports.deleteUser = async (req, res) => {
+//   try {
+//     const user = await User.findByIdAndDelete(req.params.id);
+//     if (!user) {
+//       return res.status(404).json({ success: false, message: 'User not found' });
+//     }
+//     res.status(200).json({ success: true, message: 'User deleted successfully' });
+//   } catch (error) {
+//     res.status(500).json({ success: false, message: error.message });
+//   }
+// };
 

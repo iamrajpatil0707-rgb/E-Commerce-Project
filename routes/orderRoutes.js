@@ -2,24 +2,17 @@ const express = require('express');
 const router = express.Router();
 const orderController = require('../controllers/orderController');
 const authMiddleware = require('../middleware/authMiddleware');
-const { allowRoles } = require('../middleware/roleMiddleware');
+const { checkPermission } = require('../middleware/permissionMiddleware');
 
-// Admin sees all, User sees their own (handled in controller)
-router.get('/', authMiddleware, allowRoles('support', 'sales', 'manager', 'admin', 'root'), orderController.getAllOrders);
-router.get('/:id', authMiddleware, allowRoles('admin', 'manager', 'user'), orderController.getOrderById);
+router.get('/', authMiddleware, checkPermission('read_orders', 'read_assigned_orders', 'read_own_orders', 'place_orders'), orderController.getAllOrders);
+router.get('/:id', authMiddleware, checkPermission('read_orders', 'read_own_orders', 'place_orders'), orderController.getOrderById);
 
-// Anyone logged in can create an order
-router.post('/', authMiddleware, allowRoles('user', 'admin', 'manager'), orderController.createOrder);
+router.post('/', authMiddleware, checkPermission('place_orders'), orderController.createOrder);
 
-// Only Admin/Manager can update status (e.g. "Shipped")
-router.put('/:id', authMiddleware, allowRoles('editor', 'marketing', 'manager', 'admin', 'root'), orderController.updateOrder);
+router.put('/:id', authMiddleware, checkPermission('manage_orders'), orderController.updateOrder);
+router.put('/:id/status', authMiddleware, checkPermission('update_order_status', 'manage_orders'), orderController.updateOrderStatus);
 
-// orderRoutes.js
-router.put('/:id/status', authMiddleware, allowRoles('delivery', 'manager', 'admin', 'root'), orderController.updateOrderStatus);
-
-// Admin can delete, User can maybe cancel (delete) pending orders?
-router.delete('/:id', authMiddleware, allowRoles('admin', 'user'), orderController.deleteOrder);
+router.delete('/:id', authMiddleware, checkPermission('manage_orders', 'place_orders'), orderController.deleteOrder);
 
 module.exports = router;
-
 
